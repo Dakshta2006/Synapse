@@ -1,0 +1,26 @@
+# Environment variables containing sensitive keys
+.env
+
+# Visual Studio / IDE project settings
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+CMakeSettings.json
+CMakeUserPresets.json
+
+# Build directories and generated binaries
+build/
+cli/build/
+out/
+bin/
+
+# Dependency directories (vcpkg local installs)
+vcpkg_installed/
+cli/vcpkg_installed/
+vcpkg/
+
+# System / OS files
+.DS_Store
+Thumbs.db

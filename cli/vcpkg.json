@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "ai-coder-cli",
+  "version": "1.0.0",
+  "builtin-baseline": "d59510da59a2ee8b943509998b63da7b472d93cf",
+  "dependencies": [
+    "cxxopts",
+    "cpr",
+    "nlohmann-json",
+    "fmt",
+    "tree-sitter"
+  ]
+}
