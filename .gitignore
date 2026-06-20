@@ -24,3 +24,12 @@ vcpkg/
 # System / OS files
 .DS_Store
 Thumbs.db
+
+# Project-specific ignores for build artifacts
+build_ninja/
+compile_commands.json
+*.obj
+*.ilk
+*.pdb
+*.exp
+*.lib

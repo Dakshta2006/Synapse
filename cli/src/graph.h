@@ -27,6 +27,12 @@ public:
     // Debug print
     void printGraph() const;
 
+    // Serializes graph to a string for the Planner LLM
+    std::string serializeGraph() const;
+
+    // Returns list of all filepaths in the graph
+    std::vector<std::string> getAllFiles() const;
+
 private:
     std::string rootDir;
     std::unordered_map<std::string, std::shared_ptr<DependencyNode>> nodes;

@@ -224,3 +224,33 @@ void DependencyGraph::printGraph() const {
         std::cout << "\n----------------------------------------\n";
     }
 }
+
+std::string DependencyGraph::serializeGraph() const {
+    std::stringstream ss;
+    ss << "Dependency Graph (" << nodes.size() << " nodes):\n";
+    for (const auto& [path, node] : nodes) {
+        ss << "- File: " << path << "\n";
+        ss << "  Language: " << node->ast->language << "\n";
+        ss << "  Classes/Structs: ";
+        for (const auto& c : node->ast->classes) ss << c << " ";
+        ss << "\n  Functions/Methods: ";
+        for (const auto& f : node->ast->functions) ss << f << " ";
+        ss << "\n  Imports/Includes: ";
+        for (const auto& imp : node->ast->imports) ss << imp << " ";
+        ss << "\n  Depends On Files: ";
+        for (const auto& dep : node->resolvedDependencies) ss << dep << " ";
+        ss << "\n  Dependent Files (depend on this): ";
+        for (const auto& dep : node->resolvedDependents) ss << dep << " ";
+        ss << "\n----------------------------------------\n";
+    }
+    return ss.str();
+}
+
+std::vector<std::string> DependencyGraph::getAllFiles() const {
+    std::vector<std::string> filepaths;
+    for (const auto& [path, node] : nodes) {
+        filepaths.push_back(path);
+    }
+    return filepaths;
+}
+

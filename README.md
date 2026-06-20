@@ -1,6 +1,6 @@
-# 🛠️ my_ai - AI Coding Assistant CLI
+# 🛠️ Synapse - AI Coding Assistant CLI
 
-A blazing-fast, terminal-native AI coding assistant built in C++17. `my_ai` reads your codebase structure, maps file relationships into a dependency graph, ranks the most relevant files using an AST-aware keyword & graph-proximity algorithm, and interacts with LLMs to automatically apply context-aware diffs with absolute safety (featuring automated in-memory backups and undo).
+A blazing-fast, terminal-native AI coding assistant built in C++17. `Synapse` reads your codebase structure, maps file relationships into a dependency graph, ranks the most relevant files using an AST-aware keyword & graph-proximity algorithm, and interacts with LLMs to automatically apply context-aware diffs with absolute safety (featuring automated in-memory backups and undo).
 
 ---
 
@@ -109,7 +109,7 @@ The command-line interface uses a sleek, high-contrast terminal theme with struc
 
 ```text
 =========================================================
- 🛠️  my_ai : AST-Guided Coding Assistant
+ 🛠️  Synapse : AST-Guided Coding Assistant
 =========================================================
 Usage:
   my_ai.exe [OPTION...]
@@ -148,11 +148,11 @@ Example:
 
 ## 🚀 Advanced Optimizations & Roadmap
 
-To make `my_ai` compile, run, and scale faster than typical Python-based alternatives, we can implement the following enhancements:
+To make `Synapse` compile, run, and scale faster than typical Python-based alternatives, we can implement the following enhancements:
 
 ### 1. Incremental AST Parsing & Caching
 - **Problem**: Scanning hundreds of files on every execution takes time.
-- **Solution**: We can hash the contents of files (e.g., using a quick MD5 or MurmurHash3) and serialize the AST output to a local SQLite database or JSON file. Next time `my_ai` runs, it will only parse files whose hashes have changed.
+- **Solution**: We can hash the contents of files (e.g., using a quick MD5 or MurmurHash3) and serialize the AST output to a local SQLite database or JSON file. Next time `Synapse` runs, it will only parse files whose hashes have changed.
 - **Tree-sitter feature**: Tree-sitter supports incremental parsing (re-parsing only modified lines).
 
 ### 2. Multi-threaded Parsing
@@ -160,8 +160,8 @@ To make `my_ai` compile, run, and scale faster than typical Python-based alterna
 
 ### 3. Context Window Optimization (Token Pruning)
 - LLMs charge by the token and slow down with huge prompts.
-- Instead of sending the *entire* text of the top 3 files, `my_ai` can extract *only* the relevant class/function bodies using Tree-sitter coordinates, pruning unused helper functions and boilerplates to maximize instruction density.
-
+- Instead of sending the *entire* text of the top 3 files, `  Synapse` can extract *only* the relevant class/function bodies using Tree-sitter coordinates, pruning unused helper functions and boilerplates to maximize instruction density.
+  
 ### 4. Hybrid Graph + Vector Search
 - Currently, ranking uses string matches on identifiers (variables, functions, imports) and spreads weights across graph edges.
 - **Future**: We can integrate a small C++ embeddings library (like `llama.cpp` or vector quantization) to parse semantic intent (e.g., matching "verify user is logged in" to `check_auth_session`).
