@@ -146,25 +146,3 @@ Example:
 
 ---
 
-## 🚀 Advanced Optimizations & Roadmap
-
-To make `Synapse` compile, run, and scale faster than typical Python-based alternatives, we can implement the following enhancements:
-
-### 1. Incremental AST Parsing & Caching
-- **Problem**: Scanning hundreds of files on every execution takes time.
-- **Solution**: We can hash the contents of files (e.g., using a quick MD5 or MurmurHash3) and serialize the AST output to a local SQLite database or JSON file. Next time `Synapse` runs, it will only parse files whose hashes have changed.
-- **Tree-sitter feature**: Tree-sitter supports incremental parsing (re-parsing only modified lines).
-
-### 2. Multi-threaded Parsing
-- Walking the directory structure and parsing ASTs is highly parallelizable. We can use C++17 `std::execution::par` or thread pools to parse multiple files concurrently across all CPU cores.
-
-### 3. Context Window Optimization (Token Pruning)
-- LLMs charge by the token and slow down with huge prompts.
-- Instead of sending the *entire* text of the top 3 files, `  Synapse` can extract *only* the relevant class/function bodies using Tree-sitter coordinates, pruning unused helper functions and boilerplates to maximize instruction density.
-  
-### 4. Hybrid Graph + Vector Search
-- Currently, ranking uses string matches on identifiers (variables, functions, imports) and spreads weights across graph edges.
-- **Future**: We can integrate a small C++ embeddings library (like `llama.cpp` or vector quantization) to parse semantic intent (e.g., matching "verify user is logged in" to `check_auth_session`).
-
-### 5. Multi-Language Extensibility
-- Tree-sitter uses standard parser libraries written in C. We can support multi-language environments (Python, JS, Go, Rust, C++) by compiling their respective grammar files (`parser.c`) straight into our project or linking them dynamically.
