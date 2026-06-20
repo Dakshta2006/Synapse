@@ -113,52 +113,45 @@ Usage:
 ### Multi-Agent Planning & Fix Loop Output Example:
 
 ```text
-=========================================================
- Scanning AST & Building dependency graph...
-=========================================================
-[✓] Dependency Graph built.
+[~] Scanning AST & Parsing directory: ./src ...
+[✓] Found 14 C++ files.
+[~] Building dependency graph...
+[~] Matching query "validateEmail" to AST identifiers...
+    -> Match found in registration.cpp (Weight: 1.0)
+    -> Spreading weights to neighbors (db_helper.cpp, auth.h)...
+[!] Top 3 Context Files Selected:
+    1. src/registration.cpp (Score: 1.00)
+    2. src/auth.h           (Score: 0.50)
+    3. src/db_helper.cpp     (Score: 0.25)
 
-=========================================================
- Phase 1: Planner Agent (Divide & Conquer)
-=========================================================
-[~] Generating multi-agent plan with Gemini API...
-[✓] Plan received from Planner Agent.
-
-Proposed Steps:
-  1. [src/database.h]: Modify saveUser signature to accept age.
-  2. [src/user_service.cpp]: Update registerUser to pass age to saveUser.
-
-=========================================================
- Phase 2: Execution Agent (Tiny Context Edits)
-=========================================================
-[Step 1 / 2] Modifying: src/database.h
-[~] Fetching step suggestion from Gemini API...
-[✓] Patched src/database.h successfully!
-
-[Step 2 / 2] Modifying: src/user_service.cpp
-[~] Fetching step suggestion from Gemini API...
-[✓] Patched src/user_service.cpp successfully!
-
-=========================================================
- Phase 6: Auto-Compile & Fix Loop
-=========================================================
-[~] Building project (Attempt 1 / 3):
-Command: .\build.bat
----------------------------------------------------------
-src/db_test.cpp(12): error C2660: 'Database::saveUser': function does not take 1 arguments
----------------------------------------------------------
-Exit Code: 2
-[!] Build failed. Requesting LLM correction...
-[~] Requesting compiler error fixes from Gemini API...
-
-[~] Applying compile fix patches...
-[✓] Patched src/db_test.cpp successfully!
-
-[~] Building project (Attempt 2 / 3):
-Command: .\build.bat
----------------------------------------------------------
-Build succeeded!
----------------------------------------------------------
-Exit Code: 0
-[✓] Build succeeded!
+[~] Fetching suggestions from LLM...
+[✓] AI suggests modification in src/registration.cpp.
+[~] Backup created: src/registration.cpp.bak
+[✓] Patched src/registration.cpp successfully!
+    (Run './my_ai --undo' to restore)
 ```
+
+---
+
+## 🚀 Advanced Optimizations & Roadmap
+
+To make `Synapse` compile, run, and scale faster than typical Python-based alternatives, we can implement the following enhancements:
+
+### 1. Incremental AST Parsing & Caching
+- **Problem**: Scanning hundreds of files on every execution takes time.
+- **Solution**: We can hash the contents of files (e.g., using a quick MD5 or MurmurHash3) and serialize the AST output to a local SQLite database or JSON file. Next time `Synapse` runs, it will only parse files whose hashes have changed.
+- **Tree-sitter feature**: Tree-sitter supports incremental parsing (re-parsing only modified lines).
+
+### 2. Multi-threaded Parsing
+- Walking the directory structure and parsing ASTs is highly parallelizable. We can use C++17 `std::execution::par` or thread pools to parse multiple files concurrently across all CPU cores.
+
+### 3. Context Window Optimization (Token Pruning)
+- LLMs charge by the token and slow down with huge prompts.
+- Instead of sending the *entire* text of the top 3 files, `  Synapse` can extract *only* the relevant class/function bodies using Tree-sitter coordinates, pruning unused helper functions and boilerplates to maximize instruction density.
+  
+### 4. Hybrid Graph + Vector Search
+- Currently, ranking uses string matches on identifiers (variables, functions, imports) and spreads weights across graph edges.
+- **Future**: We can integrate a small C++ embeddings library (like `llama.cpp` or vector quantization) to parse semantic intent (e.g., matching "verify user is logged in" to `check_auth_session`).
+
+### 5. Multi-Language Extensibility
+- Tree-sitter uses standard parser libraries written in C. We can support multi-language environments (Python, JS, Go, Rust, C++) by compiling their respective grammar files (`parser.c`) straight into our project or linking them dynamically.
