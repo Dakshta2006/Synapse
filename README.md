@@ -1,23 +1,41 @@
 # 🛠️ Synapse - AI Coding Assistant CLI
 
-A blazing-fast, terminal-native AI coding assistant built in C++17. `Synapse` reads your codebase structure, maps file relationships into a dependency graph, ranks the most relevant files using an AST-aware keyword & graph-proximity algorithm, and interacts with LLMs to automatically apply context-aware diffs with absolute safety (featuring automated in-memory backups and undo).
+A blazing-fast, terminal-native AI coding assistant built in C++17. `Synapse` reads your codebase structure, maps file relationships into a dependency graph, ranks relevant files using an AST-aware keyword & graph-proximity algorithm, and interacts with LLMs to automatically apply context-aware diffs with absolute safety (featuring automated in-memory backups and undo).
 
 ---
 
 ## ⚡ Technical Architecture & Code Flow
 
-The execution workflow is segmented into five core stages, executing sequentially from parsing arguments to applying changes:
+The execution workflow supports two distinct modes (Standard and Multi-Agent Planning) and features a compile verification loop:
 
 ```mermaid
 graph TD
     A[User CLI Input] -->|--prompt / --dir| B[Phase 1: CLI Parser]
     B --> C[Phase 2: Tree-sitter AST Parser]
     C -->|Extract Functions, Imports, Classes| D[Phase 3: Dependency Graph builder]
-    D -->|Build Graph & Run Proximity Ranker| E[Phase 3: Ranker Output top 3 files]
-    E --> F[Phase 4: Payload Constructor]
-    F -->|JSON via nlohmann/json| G[Phase 4: CPR HTTP Post to LLM]
-    G -->|Receive Diff Response| H[Phase 5: Diff Parser]
-    H -->|Backup Original File| I[Phase 5: Patched file write via std::filesystem]
+    
+    subgraph Standard Mode
+        D -->|Build Graph & Run Proximity Ranker| E[Phase 3: Ranker Output top files]
+        E --> F[Phase 4: LLM Payload Constructor]
+        F --> G[Phase 4: Query LLM for Edits]
+        G --> H[Phase 5: Parse and Apply Patches]
+    end
+
+    subgraph Multi-Agent Planning Mode
+        D -->|Serialize Graph| K[Phase 1: Planner Agent]
+        K -->|JSON Steps Plan| L[Phase 2: Execution Agent]
+        L -->|Iterate Steps| M[Single-File Edit Queries]
+        M --> H
+    end
+
+    H --> N{--build-cmd specified?}
+    N -->|Yes| O[Phase 6: Auto-Compile & Fix Loop]
+    O -->|Build fails| P[Query LLM for compiler fixes]
+    P -->|Apply patches| O
+    O -->|Build succeeds| Q[Done]
+    N -->|No| Q
+    
+    H -->|Backup Original File| I[Patched file write via std::filesystem]
     I -->|Undo command| J[Restore original file]
 ```
 
@@ -25,48 +43,27 @@ graph TD
 
 #### 📂 Phase 1: CLI Entry & Environment (`/cli/src/main.cpp`)
 - Built using `cxxopts` to parse options.
-- Initializes environment parameters: target codebase directory (`--dir`) and prompt instruction (`--prompt`).
-- Performs validation on input structures.
+- Initializes parameters: target codebase directory (`--dir`), prompt instruction (`--prompt`), and advanced modes:
+  - `--divide`: Enables Multi-Agent Planning (Divide & Conquer) mode.
+  - `--build-cmd`: Command to run to check compilation.
+  - `--max-fixes`: Max iterations to fix errors (default: 3).
 
 #### 📂 Phase 2: AST Analysis (`/cli/src/parser.cpp`)
-- Loads `tree-sitter` and the appropriate language parser dynamically (e.g., Python, C++, JavaScript).
-- Standardizes reading source files and traversing the AST (Abstract Syntax Tree).
-- Pulls nodes of interest:
-  - **Definitions**: Functions, classes, variable bindings.
-  - **Imports/Includes**: Identifies references to external files (`import auth`, `#include "db.h"`).
+- Traverses ASTs dynamically to extract functions, classes, and imports.
 
 #### 📂 Phase 3: Graph Construction & Graph Ranking (`/cli/src/graph.cpp`)
-- Core structures:
-  ```cpp
-  struct Node {
-      std::string filepath;
-      std::vector<std::string> functions;
-      std::vector<std::string> classes;
-      std::vector<std::string> dependencies; // Extracted from imports
-  };
-
-  struct Edge {
-      std::string source;
-      std::string target;
-  };
-  ```
-- **Graph Builder**: Populates a graph map (`std::unordered_map<std::string, std::shared_ptr<Node>>`). If file `A` imports `B`, a directed edge `A -> B` is added.
-- **Ranker Algorithm**:
-  1. Performs a fuzzy/keyword match between the user prompt and identifiers inside each node (e.g., searching for "auth" matches `auth_service.py`).
-  2. Spreads weight outwards to neighbors: if `auth_service.py` is flagged, its parent imports and dependent modules are heavily weighted.
-  3. Sorts and selects the top 3 files to build LLM context.
+- Generates dependency nodes, resolves imports to paths, and propagates weights.
+- Supports **Graph Serialization** to provide a concise ASCII graph representation for the Planner Agent.
 
 #### 📂 Phase 4: Network Payload & LLM Request (`/cli/src/client.cpp`)
-- Constructs JSON structures utilizing `nlohmann-json`.
-- Leverages `cpr` (C++ Requests, backed by libcurl) to execute asynchronous/synchronous REST requests.
-- Securely sends payload using standard system environment variables (e.g., `GEMINI_API_KEY`).
+- Communicates with the Gemini API to get raw edits, step-by-step plans, or compile fixes.
 
 #### 📂 Phase 5: Diff Application & Safety (`/cli/src/patcher.cpp`)
-- Instructs the LLM to output precise Search-and-Replace Blocks.
-- Parses blocks from the response.
-- Creates an **in-memory backup** of target files before modifying.
-- Modifies target files using `std::filesystem`.
-- Offers a rollback system via `./my_ai --undo`.
+- Parses SEARCH/REPLACE blocks and applies updates to files securely with automatic backup support (`.bak` files).
+
+#### 📂 Phase 6: Auto-Compile & Fix Loop (`/cli/src/main.cpp`)
+- Executes the user-provided compilation command after patches are applied.
+- If compile fails, extracts offending source files from build logs and requests fix patches recursively from the LLM.
 
 ---
 
@@ -76,36 +73,24 @@ We use **vcpkg** in **Manifest Mode** (`vcpkg.json`) to automate dependency inst
 
 ### Prerequisites
 - Windows 10/11
-- Visual Studio Build Tools (VS 2022) with:
-  - **Desktop development with C++**
-  - **C++ CMake tools for Windows**
-  - **vcpkg package manager**
+- Visual Studio Build Tools with C++ compiler and CMake support.
 
 ### Compilation Steps
 
-1. **Bootstrap vcpkg** (if using standard Visual Studio-integrated vcpkg or your own clone):
-   ```powershell
-   # If you have vcpkg cloned locally:
-   $VCPKG_ROOT = "C:/path/to/vcpkg"
-   ```
+1. **Bootstrap vcpkg**:
+   Ensure `vcpkg.cmake` toolchain file path is known.
 
-2. **Configure with CMake**:
-   Navigate to the `cli` directory and configure the project. CMake will automatically invoke vcpkg to pull down `cxxopts`, `cpr`, `nlohmann-json`, and `fmt`.
+2. **Configure and Build**:
+   Use CMake to configure and compile (e.g. using the Ninja or Visual Studio generator):
    ```powershell
-   cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-   ```
-
-3. **Build the project**:
-   ```powershell
+   cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake"
    cmake --build build --config Release
    ```
-   This generates `my_ai.exe` inside `build/Release/`.
+   This generates `my_ai.exe` inside the build directory.
 
 ---
 
 ## 💻 CLI User Interface
-
-The command-line interface uses a sleek, high-contrast terminal theme with structured formatting:
 
 ```text
 =========================================================
@@ -114,57 +99,66 @@ The command-line interface uses a sleek, high-contrast terminal theme with struc
 Usage:
   my_ai.exe [OPTION...]
 
-  -p, --prompt arg   User prompt for the AI (Required)
-  -d, --dir arg      Target codebase directory (default: .)
-  -u, --undo         Undo the last applied changes
-  -h, --help         Print this help message
-
-Example:
-  ./my_ai --prompt "add validateEmail to registration flow" --dir ./src
+  -p, --prompt arg     User prompt for the AI (Required)
+  -d, --dir arg        Target directory (default: .)
+  -f, --file arg       Test AST parser on a specific file
+  -u, --undo           Rollback the last applied changes
+  -t, --top arg        Number of top relevant files to include in context
+      --divide         Enable multi-agent planning (divide and conquer) mode
+      --build-cmd arg  Compilation/build command to run for the fix loop
+      --max-fixes arg  Max number of compiler fix iterations (default: 3)
+  -h, --help           Print this help message
 ```
 
-### Output Flow Example:
+### Multi-Agent Planning & Fix Loop Output Example:
 
 ```text
-[~] Scanning AST & Parsing directory: ./src ...
-[✓] Found 14 C++ files.
-[~] Building dependency graph...
-[~] Matching query "validateEmail" to AST identifiers...
-    -> Match found in registration.cpp (Weight: 1.0)
-    -> Spreading weights to neighbors (db_helper.cpp, auth.h)...
-[!] Top 3 Context Files Selected:
-    1. src/registration.cpp (Score: 1.00)
-    2. src/auth.h           (Score: 0.50)
-    3. src/db_helper.cpp     (Score: 0.25)
+=========================================================
+ Scanning AST & Building dependency graph...
+=========================================================
+[✓] Dependency Graph built.
 
-[~] Fetching suggestions from LLM...
-[✓] AI suggests modification in src/registration.cpp.
-[~] Backup created: src/registration.cpp.bak
-[✓] Patched src/registration.cpp successfully!
-    (Run './my_ai --undo' to restore)
+=========================================================
+ Phase 1: Planner Agent (Divide & Conquer)
+=========================================================
+[~] Generating multi-agent plan with Gemini API...
+[✓] Plan received from Planner Agent.
+
+Proposed Steps:
+  1. [src/database.h]: Modify saveUser signature to accept age.
+  2. [src/user_service.cpp]: Update registerUser to pass age to saveUser.
+
+=========================================================
+ Phase 2: Execution Agent (Tiny Context Edits)
+=========================================================
+[Step 1 / 2] Modifying: src/database.h
+[~] Fetching step suggestion from Gemini API...
+[✓] Patched src/database.h successfully!
+
+[Step 2 / 2] Modifying: src/user_service.cpp
+[~] Fetching step suggestion from Gemini API...
+[✓] Patched src/user_service.cpp successfully!
+
+=========================================================
+ Phase 6: Auto-Compile & Fix Loop
+=========================================================
+[~] Building project (Attempt 1 / 3):
+Command: .\build.bat
+---------------------------------------------------------
+src/db_test.cpp(12): error C2660: 'Database::saveUser': function does not take 1 arguments
+---------------------------------------------------------
+Exit Code: 2
+[!] Build failed. Requesting LLM correction...
+[~] Requesting compiler error fixes from Gemini API...
+
+[~] Applying compile fix patches...
+[✓] Patched src/db_test.cpp successfully!
+
+[~] Building project (Attempt 2 / 3):
+Command: .\build.bat
+---------------------------------------------------------
+Build succeeded!
+---------------------------------------------------------
+Exit Code: 0
+[✓] Build succeeded!
 ```
-
----
-
-## 🚀 Advanced Optimizations & Roadmap
-
-To make `Synapse` compile, run, and scale faster than typical Python-based alternatives, we can implement the following enhancements:
-
-### 1. Incremental AST Parsing & Caching
-- **Problem**: Scanning hundreds of files on every execution takes time.
-- **Solution**: We can hash the contents of files (e.g., using a quick MD5 or MurmurHash3) and serialize the AST output to a local SQLite database or JSON file. Next time `Synapse` runs, it will only parse files whose hashes have changed.
-- **Tree-sitter feature**: Tree-sitter supports incremental parsing (re-parsing only modified lines).
-
-### 2. Multi-threaded Parsing
-- Walking the directory structure and parsing ASTs is highly parallelizable. We can use C++17 `std::execution::par` or thread pools to parse multiple files concurrently across all CPU cores.
-
-### 3. Context Window Optimization (Token Pruning)
-- LLMs charge by the token and slow down with huge prompts.
-- Instead of sending the *entire* text of the top 3 files, `  Synapse` can extract *only* the relevant class/function bodies using Tree-sitter coordinates, pruning unused helper functions and boilerplates to maximize instruction density.
-  
-### 4. Hybrid Graph + Vector Search
-- Currently, ranking uses string matches on identifiers (variables, functions, imports) and spreads weights across graph edges.
-- **Future**: We can integrate a small C++ embeddings library (like `llama.cpp` or vector quantization) to parse semantic intent (e.g., matching "verify user is logged in" to `check_auth_session`).
-
-### 5. Multi-Language Extensibility
-- Tree-sitter uses standard parser libraries written in C. We can support multi-language environments (Python, JS, Go, Rust, C++) by compiling their respective grammar files (`parser.c`) straight into our project or linking them dynamically.
